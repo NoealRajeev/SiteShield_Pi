@@ -9,12 +9,26 @@ import sys
 import requests
 import json
 from datetime import datetime
+import cv2
 
 app = Flask(__name__)
 laptop_ip = None
 laptop_ip_received = threading.Event()
 continue_reading = True
 reader = SimpleMFRC522()
+
+def gen():
+    camera = cv2.VideoCapture(0)  # Change the index if you have multiple cameras
+
+    while True:
+        success, frame = camera.read()
+        if not success:
+            break
+        else:
+            ret, buffer = cv2.imencode('.jpg', frame)
+            frame = buffer.tobytes()
+            yield (b'--frame\r\n'
+                    b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
 
 # Flask routes
 @app.route('/set_ip', methods=['POST'])
@@ -32,6 +46,11 @@ def set_ip():
         return jsonify({"message": "IP address received", "ip_address": laptop_ip}), 200
     else:
         return jsonify({"error": "Invalid payload"}), 400
+
+@app.route('/video_feed')
+def video_feed():
+    return Response(gen(),
+                    mimetype='multipart/x-mixed-replace; boundary=frame')
 
 def start_flask():
     app.run(host='0.0.0.0', port=5001)  # Runs on port 5001
